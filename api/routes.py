@@ -7984,6 +7984,101 @@ def _worktree_default_from_config(profile: str | None) -> bool:
         return False
 
 
+def _expand_session_model_alias(model_id: str | None) -> tuple[str | None, str | None]:
+    """Expand a ``config.model.aliases`` short name (e.g. ``n550``) into
+    ``(target_model, authoritative_provider)``.
+
+    Returns ``(None, None)`` when ``model_id`` is not a configured alias.
+    Alias targets written as ``<provider>/<model>`` (e.g.
+    ``nvidia/nemotron-3-ultra-550b-a55b``) carry the authoritative provider
+    in the prefix. When the prefix is a known provider slug
+    (``opencode-go``, ``deepseek``, ``nvidia``, ...), it is STRIPPED so
+    backends that serve bare model ids receive the right string
+    (``opencode-go/deepseek-v4-flash`` → ``deepseek-v4-flash`` +
+    provider ``opencode-go``). Vendor-style prefixes that are NOT provider
+    slugs are preserved verbatim with provider ``None``.
+
+    Clients such as Hermex echo the session's CURRENT provider when the
+    user picks a model from another group, which is wrong for aliases
+    bound to a different provider — the alias table's provider prefix
+    overrides whatever the client sent.
+    """
+    if not model_id:
+        return None, None
+    try:
+        from api.config import get_config as _get_cfg_for_alias
+        _cfg = _get_cfg_for_alias()
+        aliases = (_cfg.get("model") or {}).get("aliases") or {}
+    except Exception:
+        logger.debug("failed to read model.aliases for alias expansion", exc_info=True)
+        return None, None
+    if not isinstance(aliases, dict):
+        return None, None
+    target = aliases.get(str(model_id).strip())
+    if not target:
+        return None, None
+    target = str(target).strip()
+    if not target:
+        return None, None
+    if "/" in target:
+        prefix, _, rest = target.partition("/")
+        try:
+            from api.config import _is_known_model_provider
+            if prefix and _is_known_model_provider(prefix):
+                return rest.strip() or None, prefix
+        except Exception:
+            logger.debug("provider-slug check failed during alias expansion", exc_info=True)
+    return target, None
+
+
+def _provider_group_for_model(model_id: str | None) -> str | None:
+    """Return the single provider whose catalog owns *model_id*, else None.
+
+    Repairs ``(model, stale_provider)`` pairs from clients that echo the
+    session's current provider when the user picks a model from a DIFFERENT
+    provider group (Hermex sends the group label as a menu only; the value
+    actually submitted keeps the session provider). Handles every id shape
+    the picker emits: bare ids (``glm-5.2``), ``@provider:model`` qualifiers,
+    and ``provider/model`` / ``vendor/model`` prefixed ids (NVIDIA NIM group:
+    ``nvidia/nemotron-...``, ``z-ai/glm-5.2``). Both sides are normalized to
+    the same bare form before comparing. Only an UNAMBIGUOUS ownership is
+    honored: when the id exists on several providers (e.g.
+    ``deepseek-v4-flash`` on go/zen/deepseek) we return None and trust the
+    caller's provider. Uses the cached catalog only — this must never
+    trigger a live per-provider rebuild on the session/update path (#1855).
+    Any failure is a conservative no-op.
+    """
+
+    def _bare(mid: str, pid: str) -> str:
+        mid = str(mid or "").strip()
+        if mid.startswith("@"):
+            mid = mid.split(":", 1)[1] if ":" in mid else mid
+        elif "/" in mid and mid.split("/", 1)[0].strip().lower() == pid.lower():
+            mid = mid.split("/", 1)[1]
+        return mid
+
+    if not model_id:
+        return None
+    try:
+        from api.config import get_available_models
+        catalog = get_available_models(prefer_cache=True)
+    except Exception:
+        return None
+    owners: list[str] = []
+    for group in catalog.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        pid = str(group.get("provider_id") or group.get("provider") or "").strip()
+        if not pid:
+            continue
+        for entry in group.get("models") or []:
+            mid = str(entry.get("id") if isinstance(entry, dict) else entry or "")
+            if _bare(mid, pid) == _bare(model_id, pid):
+                owners.append(pid)
+                break
+    return owners[0] if len(owners) == 1 else None
+
+
 def _session_model_state_from_request(
     model: str | None,
     requested_provider: str | None,
@@ -7996,11 +8091,29 @@ def _session_model_state_from_request(
         else None
     )
     if model_value:
+        # Expand configured model aliases BEFORE provider resolution. The
+        # alias target carries the authoritative provider; a provider-slug
+        # prefix is stripped so backends serving bare ids receive the right
+        # model string.
+        alias_target, alias_provider = _expand_session_model_alias(model_value)
+        if alias_target is not None:
+            model_value = alias_target
+            if alias_provider:
+                provider = alias_provider
         _bare, explicit_provider = _split_provider_qualified_model(model_value)
         if explicit_provider:
             provider = explicit_provider
         elif requested_provider is None:
             provider = _clean_session_model_provider(current_provider)
+        # Model ids echoed with a stale session provider (Hermex keeps the
+        # session provider when the user picks a model from another group):
+        # repair to the owning provider group when unambiguous. Skips
+        # ``@provider:model`` ids — those already carry an authoritative
+        # provider extracted above.
+        if provider and not model_value.startswith("@"):
+            owner = _provider_group_for_model(model_value)
+            if owner and owner != provider:
+                provider = owner
         model_value, provider, _changed = _resolve_compatible_session_model_state(
             model_value,
             provider,
