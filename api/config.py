@@ -1835,21 +1835,30 @@ _PROVIDER_MODELS = {
         {"id": "big-pickle", "label": "Big Pickle"},
     ],
     # OpenCode Go — flat-rate models via opencode.ai/go ($10/month).
-    # Synced 2026-07-08 from the public Go docs and documented models endpoint.
-    # Keep preview/free-only Zen models out of this Go picker snapshot.
+    # Synced 2026-09-08 from the live /zen/go/v1/models endpoint (35 models).
+    # 2026-09-08: 原 7/8 快照僅 19 個，缺 7 月後新增的 16 個（kimi-k3、glm-5.3、
+    # grok-4.5/4.6、gpt-5.6-luna、qwen3.8、hy3、muse、omen、longcat 等）。
+    # 註：go 池顯示不吃 live 查詢（4s budget fallback），要改這裡才看得見。
     "opencode-go": [
         {"id": "minimax-m3",       "label": "MiniMax M3"},
         {"id": "minimax-m2.7",     "label": "MiniMax M2.7"},
         {"id": "minimax-m2.5",     "label": "MiniMax M2.5"},
+        {"id": "kimi-k3",          "label": "Kimi K3"},
         {"id": "kimi-k2.7-code",   "label": "Kimi K2.7 Code"},
         {"id": "kimi-k2.6",        "label": "Kimi K2.6"},
+        {"id": "longcat-2.0",      "label": "LongCat 2.0"},
         {"id": "kimi-k2.5",        "label": "Kimi K2.5"},
         {"id": "glm-5.2",          "label": "GLM-5.2"},
+        {"id": "glm-5.3-flash",    "label": "GLM-5.3 Flash"},
+        {"id": "glm-5.3",          "label": "GLM-5.3"},
         {"id": "glm-5.1",          "label": "GLM-5.1"},
         {"id": "glm-5",            "label": "GLM-5"},
         {"id": "deepseek-v4-pro",  "label": "DeepSeek V4 Pro"},
         {"id": "deepseek-v4-flash","label": "DeepSeek V4 Flash"},
+        {"id": "deepseek-v4-flash-vision-exp", "label": "DeepSeek V4 Flash Vision"},
         {"id": "qwen3.7-max",      "label": "Qwen3.7 Max"},
+        {"id": "qwen3.8-max",      "label": "Qwen3.8 Max"},
+        {"id": "qwen3.8-flash",    "label": "Qwen3.8 Flash"},
         {"id": "qwen3.7-plus",     "label": "Qwen3.7 Plus"},
         {"id": "qwen3.6-plus",     "label": "Qwen3.6 Plus"},
         {"id": "qwen3.5-plus",     "label": "Qwen3.5 Plus"},
@@ -1857,6 +1866,15 @@ _PROVIDER_MODELS = {
         {"id": "mimo-v2-omni",     "label": "MiMo V2 Omni"},
         {"id": "mimo-v2.5-pro",    "label": "MiMo V2.5 Pro"},
         {"id": "mimo-v2.5",        "label": "MiMo V2.5"},
+        {"id": "hy4-preview",      "label": "Hy4 Preview"},
+        {"id": "hy3",              "label": "Hy3"},
+        {"id": "hy3-preview",      "label": "Hy3 Preview"},
+        {"id": "gpt-5.6-luna",     "label": "GPT-5.6 Luna"},
+        {"id": "grok-4.5",         "label": "Grok 4.5"},
+        {"id": "grok-4.6",         "label": "Grok 4.6"},
+        {"id": "muse-spark-1.3-contributor", "label": "Muse Spark 1.3"},
+        {"id": "muse-spark-1.2-contributor", "label": "Muse Spark 1.2"},
+        {"id": "omen-alpha",       "label": "Omen Alpha"},
     ],
     # 'gemini' is the hermes_cli provider ID for Google AI Studio
     # Model IDs are bare — sent directly to:
