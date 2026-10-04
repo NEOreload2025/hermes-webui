@@ -1314,6 +1314,27 @@ def _resolve_provider_alias(name: str) -> str:
     return _PROVIDER_ALIASES.get(raw, name)
 
 
+def _config_excluded_providers() -> set[str]:
+    """Canonical provider slugs hidden by ``model_catalog.excluded_providers``.
+
+    Mirrors the agent's own ``model_catalog.excluded_providers`` config list
+    (a countersigned policy gate): providers on it are excluded from the
+    agent's model catalog, so advertising them in the WebUI picker would
+    offer groups the agent refuses to route (e.g. a provider removed from
+    the fallback chain by decision). Slugs are canonicalised (alias table +
+    agent aliases) so ``opencode_free`` / ``OpenCode-Free`` style spellings
+    still match. Missing/empty list → empty set (no filtering).
+    """
+    excluded_raw = cfg.get("model_catalog", {}).get("excluded_providers", [])
+    if not isinstance(excluded_raw, list):
+        return set()
+    return {
+        _resolve_provider_alias(str(entry))
+        for entry in excluded_raw
+        if str(entry or "").strip()
+    }
+
+
 def _is_known_model_provider(provider_id: str) -> bool:
     """True when *provider_id* names a model provider WebUI can render.
 
@@ -2081,6 +2102,36 @@ def _format_ollama_label(mid: str) -> str:
     return label
 
 
+def _nous_free_tier_account() -> bool:
+    """True when the logged-in Nous account is on the Free ($0) plan.
+
+    Reads the OAuth scope persisted by hermes_cli at login: the device flow
+    grants ``billing:manage`` only on paid plans, so a token without that
+    scope means the catalog's premium models (Claude, GPT-6, …) will 404
+    ``insufficient_credits_for_paid_model`` at inference time. Used by the
+    picker to filter Nous groups down to ``:free``-suffixed models instead of
+    advertising entries the account can never call (2026-10-05 live check on
+    a Free account confirmed only ``:free`` ids complete).
+    """
+    try:
+        from hermes_cli.auth import nous_token_has_billing_scope
+
+        return not nous_token_has_billing_scope()
+    except Exception:
+        return False
+
+
+def _nous_models_usable_on_free_tier(live_ids: list[str]) -> bool:
+    """True when at least one live Nous id is usable on a Free-tier account.
+
+    The picker is gated on ``logged_in`` only, so a Free account reaches the
+    full 400+-model catalog here. If NO live id carries the ``:free`` suffix,
+    the account is on a paid plan (paid catalogs don't advertise free
+    variants) and the full list must pass through unfiltered.
+    """
+    return any(str(mid).rstrip(":").endswith(":free") for mid in live_ids)
+
+
 def _format_nous_label(mid: str) -> str:
     """Turn a Nous Portal model id into a readable display label.
 
@@ -2141,6 +2192,7 @@ def _build_nous_featured_set(
     *,
     selected_model_id: str | None = None,
     target: int = _NOUS_FEATURED_TARGET,
+    free_gate: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Trim a Nous Portal catalog into a (featured, extras) split.
 
@@ -2155,20 +2207,39 @@ def _build_nous_featured_set(
        dropdown after a refresh).
     2. Always include every entry from the curated static
        ``_PROVIDER_MODELS["nous"]`` list whose id maps onto a live id —
-       those four are explicitly maintained as flagship picks.
+       those are explicitly maintained as flagship picks.
     3. Top up to ``target`` by walking ``_NOUS_VENDOR_PRIORITY`` round-robin
        (one model per vendor each pass) so no vendor monopolises the slot
        budget. Within a vendor, the original ``live_ids`` order is preserved
        — that's the order Nous Portal returned, which approximates recency.
 
+    Free-tier gating (``free_gate=True``): when the logged-in account cannot
+    call paid models (no ``billing:manage`` scope — Free $0 plan), every paid
+    id is excluded from both lists. ``:free``-suffixed ids are the only ones
+    that complete on such an account, and the live catalog always advertises
+    them, so the gated dropdown is never empty and nothing advertised can
+    404 ``insufficient_credits_for_paid_model`` at inference time. Rule 1
+    (sticky selection) and rule 2 (flagships) still apply but drop ids the
+    account can't call — a selected paid id that vanished from a downgraded
+    plan is already broken at inference time; keeping it pinned in the
+    dropdown would just advertise a dead entry.
+
     Returns ``(featured_ids, extras_ids)`` — both lists are subsets of
-    ``live_ids`` with disjoint membership and union equal to ``live_ids``.
+    ``live_ids`` with disjoint membership and union equal to the *usable*
+    catalog.
 
     For catalogs ≤ ``_NOUS_FEATURED_THRESHOLD`` entries the function is a
-    no-op: ``featured == live_ids``, ``extras == []``.
+    no-op unless free gating removes entries: ``featured == live_ids``,
+    ``extras == []``.
     """
     if not live_ids:
         return [], []
+
+    if free_gate and _nous_models_usable_on_free_tier(live_ids):
+        live_ids = [
+            mid for mid in live_ids if str(mid).rstrip(":").endswith(":free")
+        ]
+
     if len(live_ids) <= _NOUS_FEATURED_THRESHOLD:
         return list(live_ids), []
 
@@ -5812,6 +5883,16 @@ def _static_models_catalog_without_live_probes() -> dict:
 
         groups.sort(key=_group_sort_key)
 
+        # Respect the agent's model_catalog.excluded_providers policy gate:
+        # countersigned providers (e.g. opencode-free) must not advertise
+        # picker groups the agent refuses to route.
+        _excluded_providers = _config_excluded_providers()
+        if _excluded_providers:
+            groups = [
+                g for g in groups
+                if (g.get("provider_id") or "") not in _excluded_providers
+            ]
+
         model_aliases: dict[str, str] = {}
         try:
             raw_aliases = cfg.get("model", {}).get("aliases", {})
@@ -7994,6 +8075,7 @@ def get_available_models(*, prefer_cache: bool = False, force_refresh: bool = Fa
                         featured_ids, extras_ids = _build_nous_featured_set(
                             live_ids,
                             selected_model_id=_picker_selected_model_id,
+                            free_gate=_nous_free_tier_account(),
                         )
                         ordered_ids = featured_ids + extras_ids
                         raw_models = [
@@ -8016,11 +8098,21 @@ def get_available_models(*, prefer_cache: bool = False, force_refresh: bool = Fa
                         )
                     else:
                         # hermes_cli unavailable / raised — fall back to the
-                        # curated 4-entry static list so the picker is never
+                        # curated static list so the picker is never
                         # empty in this degraded state. This matches pre-#1538
                         # behaviour for environments without hermes_cli (test
                         # envs, package mismatches, isolated WebUI builds).
                         raw_models = copy.deepcopy(_PROVIDER_MODELS.get("nous", []))
+                        if raw_models and _nous_free_tier_account():
+                            # Free-tier account + degraded live fetch: the
+                            # static flagships are all paid models, every one
+                            # would 404 at inference time. Omit the group
+                            # rather than advertise dead entries.
+                            logger.warning(
+                                "Nous Portal free-tier account: static fallback "
+                                "flagships are paid-only — omitting from picker"
+                            )
+                            raw_models = []
 
                     if raw_models:
                         _append_picker_group(
@@ -8298,6 +8390,16 @@ def get_available_models(*, prefer_cache: bool = False, force_refresh: bool = Fa
                 return (2, pid)
             return (3, pid)
         groups.sort(key=_group_sort_key)
+
+        # Respect the agent's model_catalog.excluded_providers policy gate:
+        # countersigned providers (e.g. opencode-free) must not advertise
+        # picker groups the agent refuses to route.
+        _excluded_providers = _config_excluded_providers()
+        if _excluded_providers:
+            groups = [
+                g for g in groups
+                if (g.get("provider_id") or "") not in _excluded_providers
+            ]
 
         # 12. Include model aliases so the WebUI frontend can resolve them.
         model_aliases: dict[str, str] = {}
