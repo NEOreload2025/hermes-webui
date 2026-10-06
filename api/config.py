@@ -1859,6 +1859,9 @@ _PROVIDER_MODELS = {
     # Synced 2026-09-08 from the live /zen/go/v1/models endpoint (35 models).
     # 2026-09-08: 原 7/8 快照僅 19 個，缺 7 月後新增的 16 個（kimi-k3、glm-5.3、
     # grok-4.5/4.6、gpt-5.6-luna、qwen3.8、hy3、muse、omen、longcat 等）。
+    # 2026-10-06: 新增 deepseek-v4.1-flash（管家 default 於同日改為此條）；
+    #             舊 deepseek-v4-flash 是 2026-04-24 的舊版 V4 Flash（純文字），
+    #             標 legacy 保留但勿再當主力——同名跨池不同模型，Go 池的 4.1 只認這個 id。
     # 註：go 池顯示不吃 live 查詢（4s budget fallback），要改這裡才看得見。
     "opencode-go": [
         {"id": "minimax-m3",       "label": "MiniMax M3"},
@@ -1874,8 +1877,9 @@ _PROVIDER_MODELS = {
         {"id": "glm-5.3",          "label": "GLM-5.3"},
         {"id": "glm-5.1",          "label": "GLM-5.1"},
         {"id": "glm-5",            "label": "GLM-5"},
+        {"id": "deepseek-v4.1-flash","label": "DeepSeek V4.1 Flash"},
         {"id": "deepseek-v4-pro",  "label": "DeepSeek V4 Pro"},
-        {"id": "deepseek-v4-flash","label": "DeepSeek V4 Flash"},
+        {"id": "deepseek-v4-flash","label": "DeepSeek V4 Flash (legacy)"},
         {"id": "deepseek-v4-flash-vision-exp", "label": "DeepSeek V4 Flash Vision"},
         {"id": "qwen3.7-max",      "label": "Qwen3.7 Max"},
         {"id": "qwen3.8-max",      "label": "Qwen3.8 Max"},
