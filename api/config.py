@@ -3437,6 +3437,23 @@ def model_with_provider_context(model_id: str, model_provider: str | None = None
     # (Plugin-only provider routing handled above, before the config_provider
     # bare-passthrough.)
 
+    # A slash ID from a known provider group MUST keep its provider hint. A bare
+    # "vendor/model" is read by resolve_model_provider() as an OpenRouter-style
+    # path on the DEFAULT provider, so a NIM model such as
+    # "nvidia/nemotron-3-ultra-550b-a55b" (or the same group's
+    # "qwen/qwen3-next-80b-a3b-instruct") inherits the configured provider — whose
+    # normalizer then strips the vendor prefix for flat-namespace resellers
+    # (opencode-go/zen) and the request 400s + silently falls back to another
+    # model. Custom/proxy lanes deliberately stay bare: their endpoints route on
+    # the ID itself.
+    if (
+        "/" in model
+        and provider not in ("custom",)
+        and not provider.startswith("custom:")
+        and _is_known_model_provider(provider)
+    ):
+        return f"@{provider}:{model}"
+
     # For non-OpenRouter slash IDs without an explicit configured provider,
     # keep the ID intact so existing custom/proxy base_url routing and
     # portal-provider handling remain in charge.
