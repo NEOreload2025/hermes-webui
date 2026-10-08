@@ -1867,10 +1867,15 @@ _PROVIDER_MODELS = {
     #             舊 deepseek-v4-flash 是 2026-04-24 的舊版 V4 Flash（純文字），
     #             標 legacy 保留但勿再當主力——同名跨池不同模型，Go 池的 4.1 只認這個 id。
     # 註：go 池顯示不吃 live 查詢（4s budget fallback），要改這裡才看得見。
-    # 2026-10-08: 新增 claude-haiku-5-5（Go 池 live /v1/models 有、本表原缺；
-    #             走 Anthropic Messages 協定，需 anthropic extra 才叫得動）。
+    # 2026-10-08: 曾加入 claude-haiku-5-5，同日移除。Go 池的 Claude 只吃 Anthropic
+    #             Messages（/v1/messages + x-api-key）；Hermes 的 api_mode 表
+    #             （hermes_cli/models.py 的 `_OPENCODE_API_MODE_PREFIXES`）在
+    #             opencode-go 家族缺 "claude-" 前綴 → 被當 OpenAI chat 送出 →
+    #             400 ModelProtocolUnsupported → 靜默降級 glm-5.3-flash
+    #             （實測：`hermes -z … -m opencode-go/claude-haiku-5-5 --usage-file`
+    #             印 GOH-OK，usage 檔 model=glm-5.3-flash）。選得到 ≠ 用得到，故不列。
+    #             上游補上前綴（或本機 C3 patch）後才值得加回。
     "opencode-go": [
-        {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
         {"id": "minimax-m3",       "label": "MiniMax M3"},
         {"id": "minimax-m2.7",     "label": "MiniMax M2.7"},
         {"id": "minimax-m2.5",     "label": "MiniMax M2.5"},
