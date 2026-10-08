@@ -1833,6 +1833,10 @@ _PROVIDER_MODELS = {
         {"id": "gpt-5", "label": "GPT-5"},
         {"id": "gpt-5-codex", "label": "GPT-5 Codex"},
         {"id": "gpt-5-nano", "label": "GPT-5 Nano"},
+        {"id": "claude-opus-5-5", "label": "Claude Opus 5.5"},
+        {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5"},
+        {"id": "claude-fable-5-1", "label": "Claude Fable 5.1"},
+        {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
         {"id": "claude-opus-4-7", "label": "Claude Opus 4.7"},
         {"id": "claude-opus-4-6", "label": "Claude Opus 4.6"},
         {"id": "claude-opus-4-5", "label": "Claude Opus 4.5"},
@@ -1863,7 +1867,10 @@ _PROVIDER_MODELS = {
     #             舊 deepseek-v4-flash 是 2026-04-24 的舊版 V4 Flash（純文字），
     #             標 legacy 保留但勿再當主力——同名跨池不同模型，Go 池的 4.1 只認這個 id。
     # 註：go 池顯示不吃 live 查詢（4s budget fallback），要改這裡才看得見。
+    # 2026-10-08: 新增 claude-haiku-5-5（Go 池 live /v1/models 有、本表原缺；
+    #             走 Anthropic Messages 協定，需 anthropic extra 才叫得動）。
     "opencode-go": [
+        {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
         {"id": "minimax-m3",       "label": "MiniMax M3"},
         {"id": "minimax-m2.7",     "label": "MiniMax M2.7"},
         {"id": "minimax-m2.5",     "label": "MiniMax M2.5"},
