@@ -124,3 +124,19 @@ python3 bootstrap.py
 
 Do not include private machine instructions in this tracked file. Use a
 git-ignored local note for personal workflow details.
+
+## Cursor Cloud specific instructions
+
+Cloud Agent machines already start Hermes WebUI on http://127.0.0.1:8787.
+That process keeps its state under `~/.hermes-webui-cloud` (`HERMES_HOME` and
+`HERMES_WEBUI_STATE_DIR` both live there). It is separate from a real
+`~/.hermes` directory. Leave the boot server running; `./scripts/test.sh` and
+`tests/browser_smoke.py` bind their own ports.
+
+Hermes Agent is not installed here. `/health`, the first-run wizard, settings,
+and the test suite run without it. A live chat turn needs a local Hermes Agent
+checkout plus a provider credential, which this environment does not provide.
+
+The boot image already has the repo `.venv` (from `requirements-dev.txt`),
+Playwright Chromium, and the ESLint runtime guard. Use `./scripts/test.sh` for
+pytest and `TESTING.md` for the browser smoke and lint commands.
